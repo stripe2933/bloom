@@ -1,0 +1,34 @@
+name: MSVC
+
+on: [push, pull_request]
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Vulkan SDK
+        uses: humbletim/install-vulkan-sdk@v1.1.1
+
+      - name: Use Visual Studio devenv
+        uses: seanmiddleditch/gha-setup-vsdevenv@master
+
+      - name: vcpkg dependencies
+        run: |
+          pushd $env:VCPKG_INSTALLATION_ROOT
+          ./vcpkg install stb
+          popd
+
+      - name: Configure
+        run: |
+          mkdir build
+          cmake -S . -B build -G "Visual Studio 17 2022" -T v143 `
+            -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake" `
+            -DVCTOOLS_INSTALL_DIR="$env:VCToolsInstallDir"
+
+      - name: Build
+        run: |
+          cmake --build build --config Release -j4

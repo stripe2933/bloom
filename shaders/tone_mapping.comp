@@ -1,0 +1,25 @@
+#version 450
+
+const float WHITE_LUMINANCE = 0.25;
+
+layout (set = 0, binding = 0, rgba16f) uniform image2D inputImage;
+layout (push_constant, std430) uniform PushConstantData{
+    float average_luminance;
+} pc;
+
+layout (local_size_x = 16, local_size_y = 16) in;
+
+vec3 reinhard2(vec3 exposureAdjustedInputLuminance) {
+    return exposureAdjustedInputLuminance * (1 + exposureAdjustedInputLuminance / (WHITE_LUMINANCE * WHITE_LUMINANCE)) / (1 + exposureAdjustedInputLuminance);
+}
+
+void main(){
+    uvec2 inputImageSize = imageSize(inputImage);
+    if (gl_GlobalInvocationID.x >= inputImageSize.x || gl_GlobalInvocationID.y >= inputImageSize.y) {
+        return;
+    }
+
+    vec3 exposureAdjustedInputLuminance = imageLoad(inputImage, ivec2(gl_GlobalInvocationID.xy)).rgb / (9.6 * pc.average_luminance);
+    vec3 displayLuminance = reinhard2(exposureAdjustedInputLuminance);
+    imageStore(inputImage, ivec2(gl_GlobalInvocationID.xy), vec4(displayLuminance, 1.0));
+}

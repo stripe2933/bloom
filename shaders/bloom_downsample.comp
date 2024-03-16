@@ -1,0 +1,62 @@
+#version 450
+
+layout (set = 0, binding = 0) uniform sampler2D inputImageSampler;
+layout (set = 0, binding = 1) uniform writeonly image2D outputImage;
+
+layout (local_size_x = 16, local_size_y = 16) in;
+
+layout (push_constant, std430) uniform PushConstants {
+    uvec2 inputImageSize;
+} pc;
+
+void main(){
+    uvec2 outputImageSize = imageSize(outputImage);
+    if (gl_GlobalInvocationID.x >= outputImageSize.x || gl_GlobalInvocationID.y >= outputImageSize.y) {
+        return;
+    }
+
+    vec2 texcoord = (gl_GlobalInvocationID.xy + 0.5) / imageSize(outputImage);
+    vec2 inputTexelSize = 1.0 / pc.inputImageSize;
+    float dx = inputTexelSize.x;
+    float dy = inputTexelSize.y;
+
+    // Take 13 samples around current texel:
+    // a - b - c
+    // - j - k -
+    // d - e - f
+    // - l - m -
+    // g - h - i
+    // === ('e' is the current texel) ===
+    vec3 a = texture(inputImageSampler, texcoord + vec2(-2*dx,  2*dy)).rgb;
+    vec3 b = texture(inputImageSampler, texcoord + vec2(    0,  2*dy)).rgb;
+    vec3 c = texture(inputImageSampler, texcoord + vec2( 2*dx,  2*dy)).rgb;
+
+    vec3 d = texture(inputImageSampler, texcoord + vec2(-2*dx,     0)).rgb;
+    vec3 e = texture(inputImageSampler, texcoord + vec2(    0,     0)).rgb;
+    vec3 f = texture(inputImageSampler, texcoord + vec2( 2*dx,     0)).rgb;
+
+    vec3 g = texture(inputImageSampler, texcoord + vec2(-2*dx, -2*dy)).rgb;
+    vec3 h = texture(inputImageSampler, texcoord + vec2(    0, -2*dy)).rgb;
+    vec3 i = texture(inputImageSampler, texcoord + vec2( 2*dx, -2*dy)).rgb;
+
+    vec3 j = texture(inputImageSampler, texcoord + vec2(  -dx,    dy)).rgb;
+    vec3 k = texture(inputImageSampler, texcoord + vec2(   dx,    dy)).rgb;
+    vec3 l = texture(inputImageSampler, texcoord + vec2(  -dx,   -dy)).rgb;
+    vec3 m = texture(inputImageSampler, texcoord + vec2(   dx,   -dy)).rgb;
+
+    // Apply weighted distribution:
+    // 0.5 + 0.125 + 0.125 + 0.125 + 0.125 = 1
+    // a,b,d,e * 0.125
+    // b,c,e,f * 0.125
+    // d,e,g,h * 0.125
+    // e,f,h,i * 0.125
+    // j,k,l,m * 0.5
+    // This shows 5 square areas that are being sampled. But some of them overlap,
+    // so to have an energy preserving downsample we need to make some adjustments.
+    // The weights are the distributed, so that the sum of j,k,l,m (e.g.)
+    // contribute 0.5 to the final color output. The code below is written
+    // to effectively yield this sum. We get:
+    // 0.125*5 + 0.03125*4 + 0.0625*4 = 1
+    vec3 downsample = e*0.125 + (a+c+g+i)*0.03125 + (b+d+f+h)*0.0625 + (j+k+l+m)*0.125;
+    imageStore(outputImage, ivec2(gl_GlobalInvocationID.xy), vec4(downsample, 1.0));
+}

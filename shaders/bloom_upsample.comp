@@ -1,0 +1,46 @@
+#version 450
+
+layout (set = 0, binding = 0) uniform sampler2D inputImageSampler;
+layout (set = 0, binding = 1, rgba16f) uniform image2D outputImage;
+
+layout (local_size_x = 16, local_size_y = 16) in;
+
+layout (push_constant, std430) uniform PushConstants {
+    uvec2 inputImageSize;
+} pc;
+
+void main(){
+    uvec2 outputImageSize = imageSize(outputImage);
+    if (gl_GlobalInvocationID.x >= outputImageSize.x || gl_GlobalInvocationID.y >= outputImageSize.y) {
+        return;
+    }
+
+    vec2 texcoord = (gl_GlobalInvocationID.xy + 0.5) / imageSize(outputImage);
+    vec2 inputTexelSize = 1.0 / pc.inputImageSize;
+    float dx = inputTexelSize.x;
+    float dy = inputTexelSize.y;
+
+    // Take 9 samples around current texel:
+    // a - b - c
+    // d - e - f
+    // g - h - i
+    // === ('e' is the current texel) ===
+    vec3 a = texture(inputImageSampler, texcoord + vec2(-dx,  dy)).rgb;
+    vec3 b = texture(inputImageSampler, texcoord + vec2(  0,  dy)).rgb;
+    vec3 c = texture(inputImageSampler, texcoord + vec2( dx,  dy)).rgb;
+
+    vec3 d = texture(inputImageSampler, texcoord + vec2(-dx,   0)).rgb;
+    vec3 e = texture(inputImageSampler, texcoord + vec2(  0,   0)).rgb;
+    vec3 f = texture(inputImageSampler, texcoord + vec2( dx,   0)).rgb;
+
+    vec3 g = texture(inputImageSampler, texcoord + vec2(-dx, -dy)).rgb;
+    vec3 h = texture(inputImageSampler, texcoord + vec2(  0, -dy)).rgb;
+    vec3 i = texture(inputImageSampler, texcoord + vec2( dx, -dy)).rgb;
+
+    // Apply weighted distribution, by using a 3x3 tent filter:
+    //  1   | 1 2 1 |
+    // -- * | 2 4 2 |
+    // 16   | 1 2 1 |
+    vec3 upsample = imageLoad(outputImage, ivec2(gl_GlobalInvocationID.xy)).rgb + (e*4.0 + (b+d+f+h)*2.0 + (a+c+g+i)) / 16.0;
+    imageStore(outputImage, ivec2(gl_GlobalInvocationID.xy), vec4(upsample, 1.0));
+}

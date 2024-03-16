@@ -1,0 +1,17 @@
+#version 450
+
+layout (set = 0, binding = 0) uniform writeonly image2D outputImage;
+
+layout (local_size_x = 16, local_size_y = 16) in;
+
+void main(){
+    uvec2 outputImageSize = imageSize(outputImage);
+    if (gl_GlobalInvocationID.x >= outputImageSize.x || gl_GlobalInvocationID.y >= outputImageSize.y) {
+        return;
+    }
+
+    uvec2 centerOffset = abs(ivec2(gl_WorkGroupSize.xy / 2) - ivec2(gl_LocalInvocationID.xy));
+    bool filled = centerOffset.x + centerOffset.y < 8;
+    vec3 color = vec3(gl_WorkGroupID.x % 3, gl_WorkGroupID.y % 3, (gl_WorkGroupID.x + gl_WorkGroupID.y) % 3);
+    imageStore(outputImage, ivec2(gl_GlobalInvocationID.xy), vec4(filled ? color : vec3(0.0), 1.0));
+}
