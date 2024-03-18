@@ -2,6 +2,7 @@ export module bloom:app;
 
 import std;
 import vulkan_hpp;
+import :utils;
 
 export class App {
 public:
@@ -10,12 +11,11 @@ public:
 
         explicit QueueFamilyIndices(
             vk::PhysicalDevice physicalDevice) {
-            for (std::uint32_t idx = 0; vk::QueueFamilyProperties properties : physicalDevice.getQueueFamilyProperties()) {
+            for (auto [idx, properties] : physicalDevice.getQueueFamilyProperties() | utils::views::enumerate<std::uint32_t>) {
                 if (properties.queueFlags & vk::QueueFlagBits::eCompute) {
                     compute = idx;
                     return;
                 }
-                ++idx;
             }
 
             throw std::invalid_argument { "physicalDevice has no compute queue family." };
@@ -103,7 +103,7 @@ private:
             vk::ArrayProxyNoTemporaries(queuePriority),
         };
 
-        constexpr std::vector<const char*> deviceExtensions {
+        const std::vector<const char*> deviceExtensions {
 #if __APPLE__
             "VK_KHR_portability_subset",
 #endif
