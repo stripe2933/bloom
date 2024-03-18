@@ -103,8 +103,10 @@ private:
             vk::ArrayProxyNoTemporaries(queuePriority),
         };
 
-        constexpr std::array deviceExtensions {
+        constexpr std::vector<const char*> deviceExtensions {
+#if __APPLE__
             "VK_KHR_portability_subset",
+#endif
             "VK_EXT_shader_atomic_float",
         };
         constexpr auto physicalDeviceFeatures
